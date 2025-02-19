@@ -26,7 +26,7 @@ func ConnectDB() {
 		os.Getenv("DB_PORT"),
 	)
 
-	fmt.Println("DSN:", dsn) // Debugging output
+	//fmt.Println("DSN:", dsn) // Debugging output
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -34,5 +34,5 @@ func ConnectDB() {
 	}
 
 	DB = db
-	fmt.Println("Database connected successfully!")
+	//fmt.Println("Database connected successfully!")
 }

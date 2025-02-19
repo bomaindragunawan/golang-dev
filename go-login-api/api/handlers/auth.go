@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -32,7 +32,19 @@ func generateToken(user models.User) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	secretKey := os.Getenv("JWT_SECRET")
+
+	if secretKey == "" {
+		fmt.Println("JWT_SECRET is missing!")
+		return "", fmt.Errorf("JWT_SECRET is not set")
+	}
+
+	signedToken, err := token.SignedString([]byte(secretKey))
+
+	// Debugging: Print token yang dibuat
+	fmt.Println("Generated Token:", signedToken)
+
+	return signedToken, err
 }
 
 // Handler Login
