@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"fmt"
+	"go-login-api/config"
+	"go-login-api/models"
 	"net/http"
 	"os"
 	"strings"
@@ -30,6 +32,16 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// Debugging: Print token setelah pembersihan
 		//fmt.Println("Token After Cleaning:", tokenString)
+
+		// Cek apakah token ada di blacklist
+		var count int64
+		config.DB.Model(&models.BlacklistToken{}).Where("token = ?", tokenString).Count(&count)
+		if count > 0 {
+			//fmt.Println("Token masuk blacklist, akses ditolak")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has been revoked"})
+			c.Abort()
+			return
+		}
 
 		// Ambil secret key dari environment
 		secretKey := os.Getenv("JWT_SECRET")

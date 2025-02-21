@@ -8,6 +8,9 @@ import (
 func main() {
 	config.ConnectDB()
 	//config.DB.AutoMigrate(&models.User{})
+	//config.DB.AutoMigrate(&models.BlacklistToken{})
+	//config.DB.AutoMigrate(&models.PasswordReset{})
 	r := routes.Setup()
 	r.Run(":8080")
+
 }

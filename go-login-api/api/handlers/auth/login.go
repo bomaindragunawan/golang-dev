@@ -1,4 +1,4 @@
-package handlers
+package auth
 
 import (
 	"fmt"
@@ -42,7 +42,7 @@ func generateToken(user models.User) (string, error) {
 	signedToken, err := token.SignedString([]byte(secretKey))
 
 	// Debugging: Print token yang dibuat
-	fmt.Println("Generated Token:", signedToken)
+	//fmt.Println("Generated Token:", signedToken)
 
 	return signedToken, err
 }
@@ -81,12 +81,67 @@ func LoginHandler(c *gin.Context) {
 	}
 
 	// Buat token JWT
-	token, err := generateToken(user)
+	accessToken, err := generateToken(user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
 		return
 	}
 
+	// Buat refresh token
+	refreshToken, err := generateRefreshToken(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
+		return
+	}
+
+	// Simpan refresh token ke database
+	user.RefreshToken = refreshToken
+	config.DB.Save(&user)
+
 	// Kirim token ke user
-	c.JSON(http.StatusOK, LoginResponse{Token: token})
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	})
+
+}
+
+func generateRefreshToken(user models.User) (string, error) {
+	claims := jwt.MapClaims{
+		"user_id": user.ID,
+		"exp":     time.Now().Add(time.Hour * 24).Unix(), // Refresh token berlaku 7 hari
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+}
+
+func RefreshTokenHandler(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refresh_token" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	// Cari user berdasarkan refresh token
+	var user models.User
+	result := config.DB.Where("refresh_token = ?", req.RefreshToken).First(&user)
+	if result.Error != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
+		return
+	}
+
+	// Buat access token baru
+	newAccessToken, err := generateToken(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token": newAccessToken,
+	})
 }
