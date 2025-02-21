@@ -10,9 +10,12 @@ import (
 
 func Setup() *gin.Engine {
 	router := gin.Default()
-	router.POST("/register", auth.RegisterHandler)
-	router.POST("/login", auth.LoginHandler)
-	router.POST("/refresh-token", auth.RefreshTokenHandler)
+	api := router.Group("/api")
+	api.POST("/register", auth.RegisterHandler)
+	api.POST("/login", auth.LoginHandler)
+	api.POST("/refresh-token", auth.RefreshTokenHandler)
+	api.POST("/forgot-password", auth.ForgotPasswordHandler)
+	api.POST("/reset-password", auth.ResetPasswordHandler)
 
 	// Protected routes (hanya bisa diakses dengan token JWT)
 	protected := router.Group("/api")
