@@ -17,11 +17,7 @@ func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := c.GetHeader("Authorization")
 
-		// Debugging: Print token yang diterima
-		//fmt.Println("Token Diterima:", tokenString)
-
 		if tokenString == "" || !strings.HasPrefix(tokenString, "Bearer ") {
-			fmt.Println("Token tidak ada atau format salah")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token required or malformed"})
 			c.Abort()
 			return
@@ -30,14 +26,10 @@ func AuthMiddleware() gin.HandlerFunc {
 		// Hilangkan "Bearer " agar hanya mendapatkan token asli
 		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
-		// Debugging: Print token setelah pembersihan
-		//fmt.Println("Token After Cleaning:", tokenString)
-
 		// Cek apakah token ada di blacklist
 		var count int64
 		config.DB.Model(&models.BlacklistToken{}).Where("token = ?", tokenString).Count(&count)
 		if count > 0 {
-			//fmt.Println("Token masuk blacklist, akses ditolak")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has been revoked"})
 			c.Abort()
 			return
@@ -52,25 +44,12 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Debug: Print secret key
-		//fmt.Println("JWT Secret:", secretKey)
-
 		// Parse token JWT
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(secretKey), nil
 		})
 
-		// Debug: Print error parsing token
-		if err != nil {
-			fmt.Println("JWT Error:", err)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			c.Abort()
-			return
-		}
-
-		// Validasi token
-		if !token.Valid {
-			fmt.Println("Token tidak valid")
+		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
@@ -79,17 +58,37 @@ func AuthMiddleware() gin.HandlerFunc {
 		// Ambil claims dari token
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			fmt.Println("Claims token tidak valid")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 			c.Abort()
 			return
 		}
 
-		// Debugging: Print claims dari token
-		//fmt.Println("Claims:", claims)
+		// Ambil user_id dan email dari token
+		userID, exists := claims["user_id"]
+		email, emailExists := claims["email"]
 
-		// Simpan email user ke context Gin
-		c.Set("email", claims["email"])
+		if !exists || !emailExists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token data"})
+			c.Abort()
+			return
+		}
+
+		// Konversi userID ke format yang benar (float64 → uint)
+		userIDUint := uint(userID.(float64))
+
+		// Ambil data user dari database
+		var user models.User
+		if err := config.DB.First(&user, userIDUint).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+			c.Abort()
+			return
+		}
+
+		// Simpan user_id dan role ke context agar bisa diakses di middleware RBAC
+		c.Set("user_id", userIDUint)
+		c.Set("user_role", user.Role)
+		c.Set("email", email)
+
 		c.Next()
 	}
 }

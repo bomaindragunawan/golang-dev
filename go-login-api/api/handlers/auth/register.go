@@ -2,6 +2,7 @@ package auth
 
 import (
 	"go-login-api/config"
+	"go-login-api/helper"
 	"go-login-api/models"
 	"net/http"
 
@@ -10,30 +11,48 @@ import (
 )
 
 func RegisterHandler(c *gin.Context) {
-	var user models.User
+	var req models.RegisterRequest // Pakai struct dari models
 
-	if err := c.ShouldBindJSON(&user); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Debugging: Cetak password sebelum hashing
-	//fmt.Println("Raw Password:", user.Password)
-
 	// Hash password sebelum disimpan
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
 	}
 
-	// Debugging: Cetak password setelah hashing
-	//fmt.Println("Hashed Password:", string(hashedPassword))
+	// Default role jika tidak ditentukan
+	if req.Role == "" {
+		req.Role = "user"
+	}
 
-	user.Password = string(hashedPassword)
+	// **Batasi hanya admin yang bisa membuat admin baru**
+	if req.Role == "admin" {
+		_, isAdmin := c.Get("user_role") // Cek role dari middleware JWT
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can create an admin user"})
+			return
+		}
+	}
 
-	config.DB.Create(&user)
+	// Gunakan helper untuk konversi RegisterRequest ke User
+	user := helper.ToUser(req, string(hashedPassword))
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully!"})
+	if err := config.DB.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
 
+	// Gunakan struct `UserResponse` untuk response
+	// **Gunakan helper untuk konversi User ke UserResponse**
+	response := helper.ToUserResponse(user)
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "User registered successfully!",
+		"user":    response,
+	})
 }
