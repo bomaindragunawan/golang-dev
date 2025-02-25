@@ -27,6 +27,8 @@ func Setup() *gin.Engine {
 	// User biasa bisa mengakses profil dan logout
 	protected.GET("/profile", handlers.ProfileHandler)
 	protected.POST("/logout", auth.LogoutHandler)
+	protected.PUT("/update-profile", handlers.UpdateProfileHandler)
+	protected.DELETE("/delete-account", auth.DeleteAccountHandler)
 
 	// Grup khusus admin
 	admin := protected.Group("/admin")
@@ -35,6 +37,8 @@ func Setup() *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"message": "Welcome, Admin!"})
 	})
 	admin.POST("/register", auth.RegisterAdminHandler)
+	admin.GET("/get-users", handlers.GetAllUsersHandler)
+	admin.DELETE("/delete-user/:id", auth.DeleteUserByAdminHandler)
 
 	return router
 }
